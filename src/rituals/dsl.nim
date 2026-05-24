@@ -49,9 +49,9 @@ setControlCHook(sigint)
 
 template ritual*(ritualName: string, body: untyped) =
   block:
-    let scriptDir = parentDir(instantiationInfo(-1, true).filename)
-    let packageName = lastPathPart(scriptDir)
-    let callDir {.inject, used.} = getCurrentDir()
+    let scriptDir   {.inject, used.} = parentDir(instantiationInfo(-1, true).filename)
+    let packageName {.inject, used.} = lastPathPart(scriptDir)
+    let callDir     {.inject, used.} = getCurrentDir()
     var jobStack: seq[Job]
     var logCounter = newLogCounter()
     var pendingChild: Job = nil
@@ -69,35 +69,53 @@ template ritual*(ritualName: string, body: untyped) =
       flushPending(pendingChild)
 
     template task(taskName: string, taskBody: untyped) {.used.} =
-      flushPending(pendingChild)
-      let job = run(taskName, nil)
-      job.scriptDir = scriptDir
-      job.logPath = logCounter.nextLogPath(taskName)
+      task(taskName, "", taskBody)
 
-      job.procedure = proc() =
-        {.cast(gcsafe).}:
-          cwdLock.acquire()
-          setCurrentDir(job.scriptDir)
-          cwdLock.release()
-        let taskLog {.inject, used.} = newTaskLog(job.logPath)
+    template task(taskName: string, taskLabel: string, taskBody: untyped) {.used.} =
+      block:
+        flushPending(pendingChild)
+        let job {.inject, used.} = run(taskName, nil)
+        job.scriptDir = scriptDir
+        job.logPath = logCounter.nextLogPath(taskName)
+        job.label = taskLabel
 
-        template log(message: string) {.used.} =
-          taskLog.log(message)
-
-        try:
-          taskBody
-        except Exception as error:
-          job.state = Failed
+        job.procedure = proc() =
           {.cast(gcsafe).}:
-            ritualMonitor[].fail(job.name, error.msg, job.logPath)
-          quit(1)
-        finally:
-          taskLog.close()
+            cwdLock.acquire()
+            setCurrentDir(job.scriptDir)
+            cwdLock.release()
+          let taskLog {.inject, used.} = newTaskLog(job.logPath)
 
-      if jobStack.len == 1:
-        pendingChild = job
-      else:
-        jobStack[^1].children.add job
+          template log(message: string) {.used.} =
+            taskLog.log(message)
+
+          try:
+            taskBody
+          except Exception as error:
+            job.state = Failed
+            {.cast(gcsafe).}:
+              ritualMonitor[].fail(job.name, error.msg, job.logPath)
+            quit(1)
+          finally:
+            taskLog.close()
+
+        if taskLabel != "":
+          job.renderer = proc(
+            ritui: var Ritui,
+            name: string,
+            state: TaskState,
+            maxNameLen: int,
+            tick: int
+          ) {.closure.} =
+            if state == Done:
+              ritui.drawLabel(name, bold & job.label, maxNameLen, tick, state)
+            else:
+              ritui.drawLabel(name, job.label, maxNameLen, tick, state)
+
+        if jobStack.len == 1:
+          pendingChild = job
+        else:
+          jobStack[^1].children.add job
 
     template tui(tuiBody: untyped) {.used.} =
       let targetJob =

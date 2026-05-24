@@ -23,6 +23,7 @@ type Job* {.acyclic.} = ref object
     lastTick*: int
     name*: string
     logPath*: string
+    label*: string
 
 
 proc sequential*(): Job =

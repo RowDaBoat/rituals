@@ -1,6 +1,7 @@
 import std/[os, osproc, streams, httpclient, strutils, exitprocs]
 when defined(posix):
   import std/posix
+import jobs
 import output
 import ritui
 
@@ -13,8 +14,8 @@ let nim* = Nim()
 
 
 template cmd*(command: string, name: string = "cmd") =
-  task name:
-    let process = startProcess(command, options = {poStdErrToStdOut, poEvalCommand})
+  task name, command:
+    let process = startProcess(job.label, options = {poStdErrToStdOut, poEvalCommand})
     let stream = process.outputStream
 
     while not stream.atEnd:
@@ -26,12 +27,6 @@ template cmd*(command: string, name: string = "cmd") =
 
     if exitCode != 0:
       raise newException(OSError, "command failed with exit code " & $exitCode)
-
-  tui:
-    if state == Done:
-      label(bold & command, state)
-    else:
-      label(command, state)
 
 
 template copy*(source: string, destination: string, name: string = "copy") =
