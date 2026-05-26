@@ -53,7 +53,7 @@ template ritual*(ritualName: string, body: untyped) =
     let packageName {.inject, used.} = lastPathPart(scriptDir)
     let callDir     {.inject, used.} = getCurrentDir()
     var jobStack: seq[Job]
-    var logCounter = newLogCounter()
+    var logCounter = newLogCounter(callDir / defaultLogDir)
     var pendingChild: Job = nil
 
     proc flushPending(pending: var Job) =
