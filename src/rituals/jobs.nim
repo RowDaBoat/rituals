@@ -8,6 +8,7 @@ type JobKind* = enum
   Sequential
   Parallel
   Run
+  Reference
 
 
 type Job* {.acyclic.} = ref object
@@ -24,6 +25,8 @@ type Job* {.acyclic.} = ref object
     name*: string
     logPath*: string
     label*: string
+  of Reference:
+    targetName*: string
 
 
 proc sequential*(): Job =
@@ -36,6 +39,10 @@ proc parallel*(): Job =
 
 proc run*(name: string, work: proc()): Job =
   Job(kind: Run, name: name, procedure: work, startTick: -1)
+
+
+proc reference*(targetName: string): Job =
+  Job(kind: Reference, targetName: targetName)
 
 
 proc wrapWithState*(job: Job): proc() =
@@ -82,3 +89,6 @@ proc execute*(pool: WorkerPool, job: Job, predecessor: Barrier = nil): Barrier {
     pool.send work(wrapWithState(job))
     pool.send barrier.release
     return barrier
+
+  of Reference:
+    raise newException(ValueError, "unresolved reference job: " & job.targetName)

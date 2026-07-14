@@ -23,6 +23,24 @@ proc listRituals*() =
     echo name
 
 
+proc resolveReferences(job: Job) =
+  case job.kind
+  of Sequential, Parallel:
+    for i in 0 ..< job.children.len:
+      let child = job.children[i]
+      if child.kind == Reference:
+        if not rituals.hasKey(child.targetName):
+          styledEcho fgRed, "Error: ", resetStyle, "Unknown ritual recited: '", child.targetName, "'"
+          quit(1)
+        let resolved = rituals[child.targetName]
+        resolveReferences(resolved)
+        job.children[i] = resolved
+      else:
+        resolveReferences(child)
+  of Run, Reference:
+    discard
+
+
 proc runRitual*(name: string, plaintext = false) =
   if not rituals.hasKey(name):
     styledEcho fgRed, "Error: ", resetStyle, "Unknown ritual: '", name, "'"
@@ -30,6 +48,7 @@ proc runRitual*(name: string, plaintext = false) =
 
   plaintextMode = plaintext
   let job = rituals[name]
+  resolveReferences(job)
   let pool = newWorkerPool()
   setCurrentDir(job.scriptDir)
   ritualMonitor[] = startMonitor(name, job, plaintextMode)
@@ -177,11 +196,12 @@ template ritual*(ritualName: string, body: untyped) =
         if '.' in targetName: targetName
         else: packageName & "." & targetName
 
-      if rituals.hasKey(resolvedName):
-        if jobStack.len == 1:
-          pendingChild = rituals[resolvedName]
-        else:
-          jobStack[^1].children.add rituals[resolvedName]
+      let referenceJob = reference(resolvedName)
+
+      if jobStack.len == 1:
+        pendingChild = referenceJob
+      else:
+        jobStack[^1].children.add referenceJob
 
     jobStack.add jobs.sequential()
 

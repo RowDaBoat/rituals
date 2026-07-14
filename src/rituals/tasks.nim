@@ -15,7 +15,10 @@ let nim* = Nim()
 
 template cmd*(command: string, name: string = "cmd") =
   task name, command:
-    let process = startProcess(job.label, options = {poStdErrToStdOut, poEvalCommand})
+    when defined(windows):
+      let process = startProcess("cmd /c " & job.label, options = {poStdErrToStdOut, poEvalCommand})
+    else:
+      let process = startProcess(job.label, options = {poStdErrToStdOut, poEvalCommand})
     let stream = process.outputStream
 
     while not stream.atEnd:
