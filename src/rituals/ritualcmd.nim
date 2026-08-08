@@ -76,7 +76,7 @@ when isMainModule:
     quit(1)
 
   let configFlags = readConfigFlags(config)
-  let flags = "--verbosity:0 --warnings:off --hints:off --skipUserCfg --skipParentCfg --skipProjCfg"
+  let flags = "--verbosity:0 --warnings:off --hints:off --skipParentCfg --skipProjCfg"
   var eval = ""
 
   if args.strip() == "list":
