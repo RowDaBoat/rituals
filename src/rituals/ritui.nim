@@ -1,5 +1,24 @@
 import std/strutils
 
+when defined(windows):
+  import std/winlean
+
+  const enableVirtualTerminalProcessing = 0x0004'i32
+
+  proc getConsoleMode(handle: Handle, mode: ptr DWORD): WINBOOL
+    {.stdcall, dynlib: "kernel32", importc: "GetConsoleMode".}
+  proc setConsoleMode(handle: Handle, mode: DWORD): WINBOOL
+    {.stdcall, dynlib: "kernel32", importc: "SetConsoleMode".}
+
+  proc enableAnsi*(): bool =
+    let handle = getStdHandle(STD_OUTPUT_HANDLE)
+    var mode: DWORD
+    if getConsoleMode(handle, addr mode) == 0:
+      return false
+    setConsoleMode(handle, mode or enableVirtualTerminalProcessing) != 0
+else:
+  proc enableAnsi*(): bool = true
+
 const reset*      = "\e[0m"
 const eraseLine*  = "\e[2K"
 const hideCursor* = "\e[?25l"

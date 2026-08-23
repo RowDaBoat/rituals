@@ -1,4 +1,5 @@
 import std/[os, osproc, sequtils, strutils, terminal, strformat]
+import ritui
 
 
 proc parseArgs(): tuple[dir: string, args: string, plaintext: bool] =
@@ -19,6 +20,18 @@ proc parseArgs(): tuple[dir: string, args: string, plaintext: bool] =
     inc i
 
   result.args = forwarded.join(" ")
+
+
+proc terminalLacksAnsi(): bool =
+  existsEnv("NO_COLOR") or getEnv("TERM") == "dumb"
+
+
+proc outputIsRedirected(): bool =
+  not stdout.isatty()
+
+
+proc shouldUsePlaintext(plaintextFlag: bool): bool =
+  plaintextFlag or outputIsRedirected() or terminalLacksAnsi()
 
 
 proc findConfig(dir: string): string =
@@ -61,9 +74,28 @@ proc initWorkspace(dir: string) =
   let configPath = root / "ritual.cfg"
   writeFile(configPath, config)
 
+  discard enableAnsi()
+  var ritui: Ritui
+  ritui.drawHeader("init")
+
+  var names = @["rituals"]
+  for path in ritualPaths:
+    names.add lastPathPart(path)
+
+  var maxNameLen = 0
+  for name in names:
+    maxNameLen = max(maxNameLen, name.len)
+
+  ritui.drawLabel("rituals", ritualsPath, maxNameLen, 0, Done)
+  for path in ritualPaths:
+    ritui.drawLabel(lastPathPart(path), path / "ritual.nim", maxNameLen, 0, Done)
+
+  ritui.drawFooter()
+
 
 when isMainModule:
   let (dir, args, plaintext) = parseArgs()
+  let usePlaintext = shouldUsePlaintext(plaintext)
 
   if args.strip() == "init":
     initWorkspace(dir)
@@ -87,7 +119,7 @@ when isMainModule:
     let qualifiedName = if '.' in name: name else: &"{packageName}.{name}"
     let ritual = &"\\\"{qualifiedName}\\\""
     var nimCode = "import rituals;"
-    nimCode &=   &"runRitual({ritual}, {plaintext})"
+    nimCode &=   &"runRitual({ritual}, {usePlaintext})"
     eval = &"--eval:\"{nimCode}\""
 
   let command = @["nim r", flags, configFlags, eval].join(" ")

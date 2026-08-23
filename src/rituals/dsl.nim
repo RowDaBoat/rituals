@@ -46,7 +46,7 @@ proc runRitual*(name: string, plaintext = false) =
     styledEcho fgRed, "Error: ", resetStyle, "Unknown ritual: '", name, "'"
     quit(1)
 
-  plaintextMode = plaintext
+  plaintextMode = plaintext or not enableAnsi()
   let job = rituals[name]
   resolveReferences(job)
   let pool = newWorkerPool()

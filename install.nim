@@ -74,6 +74,7 @@ proc promptTarget(): InstallTarget =
   let options = ["Nimby  (~/.nimby/nim/bin)", "Nimble (~/.nimble/bin)", "Skip"]
   var selected = 0
 
+  discard enableAnsi()
   stdout.write "\e[?25l"
   stdout.write "Install location:\n"
   renderOptions(options, selected)
