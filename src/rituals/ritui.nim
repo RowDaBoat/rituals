@@ -1,4 +1,4 @@
-import std/strutils
+import std/[strutils, unicode, terminal]
 
 when defined(windows):
   import std/winlean
@@ -80,6 +80,68 @@ proc endFrame*(ritui: var Ritui) =
   stdout.flushFile()
 
 
+proc terminalColumns(): int =
+  result = terminalWidth()
+  if result <= 0:
+    result = 80
+
+
+proc emitLine*(ritui: var Ritui, line: string, indent = 0) =
+  let width = terminalColumns()
+  let contWidth = max(width - indent, 1)
+  let contPrefix =
+    if indent > 0: fg(52) & "│" & spaces(indent - 1) & reset
+    else: ""
+
+  var wrapped = newStringOfCap(line.len + 16)
+  var activeStyle = ""
+  var column = 0
+  var limit = width
+  var rows = 1
+  var i = 0
+
+  while i < line.len:
+    if line[i] == '\e':
+      let start = i
+      inc i
+      var isStyle = false
+      if i < line.len and line[i] == '[':
+        inc i
+        while i < line.len and line[i] notin {'@'..'~'}:
+          inc i
+        isStyle = i < line.len and line[i] == 'm'
+        if i < line.len:
+          inc i
+      elif i < line.len:
+        inc i
+
+      let escape = line[start ..< i]
+      wrapped.add escape
+      if isStyle:
+        if escape == reset: activeStyle = ""
+        else: activeStyle.add escape
+    elif line[i].ord < 0x20:
+      wrapped.add line[i]
+      inc i
+    else:
+      if column >= limit:
+        wrapped.add "\n\r" & eraseLine & contPrefix & activeStyle
+        column = 0
+        limit = contWidth
+        inc rows
+        while i < line.len and line[i] == ' ':
+          inc i
+        continue
+      let runeBytes = runeLenAt(line, i)
+      wrapped.add line[i ..< i + runeBytes]
+      inc i, runeBytes
+      inc column
+
+  wrapped.add "\n"
+  stdout.write wrapped
+  inc ritui.drawnLines, rows
+
+
 proc drawBar*(
   ritui: var Ritui,
   name: string,
@@ -118,8 +180,7 @@ proc drawBar*(
   let begin = "\r" & eraseLine & fg(52) & "│ " & fg(88)
   let suffix = if state == Failed: " " & fg(196) & "ERROR"
                else: " " & fg(88) & $formatFloat(percentage, ffDecimal, 2) & "%"
-  stdout.write begin & paddedName & " " & bar & suffix & reset & "\n"
-  inc ritui.drawnLines
+  ritui.emitLine(begin & paddedName & " " & bar & suffix & reset, maxNameLen + 3)
 
 
 proc drawState*(tick: int, state: TaskState): string =
@@ -159,7 +220,6 @@ proc drawLabel*(ritui: var Ritui, name: string, label: string, maxNameLen: int, 
     rune = fg(236) & emptyRunes[idx] & reset
     color = reset
 
-  stdout.write begin & paddedName & " " & rune & " " & color & label & reset & "\n"
-  inc ritui.drawnLines
+  ritui.emitLine(begin & paddedName & " " & rune & " " & color & label & reset, maxNameLen + 5)
 
 
